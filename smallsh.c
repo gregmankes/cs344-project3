@@ -22,6 +22,7 @@ char ** reset_command_array(char **, int, int);
 void wait_for_children(int *status){
 	pid_t pid = waitpid(-1, status, WNOHANG);
 	while(pid > 0){
+		printf("Background process %d closed\n", pid);
 		get_status(status);
 		pid = waitpid(-1, status, WNOHANG);
 	}
@@ -231,11 +232,10 @@ void run_shell(){
 
 		// if the first character of the first command is a comment, then skip it
 		if(strcmp(commands[0], "") == 0 || strcmp(commands[0], "\n") == 0){
-			// this is the case where we dont have anything, skip this too
-			continue;
+		    // don't do anything
 		}
 		else if(*(commands[0]) == '#'){
-			continue;
+			// don't do anything
 		}
 		else if (strcmp(commands[0], "cd") == 0){
 			// We need to change the directory, call this function
