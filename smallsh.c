@@ -17,15 +17,15 @@
 #include <string.h>
 
 // Function declarators
-void exit_shell(int*);
+void exit_shell(int*, pid_t *, int*);
 void get_status(int*);
-void handle_fork_exec(int*, int, struct sigaction, char *, char *, char **);
+void handle_fork_exec(int*, int, struct sigaction, char *, char *, char **, pid_t *, int*);
 void prompt(char *);
 void change_directory(char **);
 char ** create_char_array(int, int);
 void delete_char_array(char **, int);
 void run_shell();
-void wait_for_children(int*);
+void wait_for_children(int*, pid_t*, int *);
 char ** reset_command_array(char **, int, int);
 
 /******************************************************************************
@@ -33,10 +33,17 @@ char ** reset_command_array(char **, int, int);
  * 
  * Waits for any child process that hasn't completed yet
  *****************************************************************************/
-void wait_for_children(int *status){
+void wait_for_children(int *status, pid_t* background_pids, int* num_background_pids){
 	pid_t pid = waitpid(-1, status, WNOHANG);
+	int i;
 	while(pid > 0){
 		printf("Background process %d closed\n", pid);
+		i = 0;
+		for (; i < *num_background_pids; i++){
+			if(background_pids[i] == pid){
+				background_pids[i] = 0;
+			}
+		}
 		get_status(status);
 		pid = waitpid(-1, status, WNOHANG);
 	}
@@ -49,7 +56,7 @@ void wait_for_children(int *status){
  * wait for a child process if the child is in the foreground. Will not wait
  * if child is in the background.
  *****************************************************************************/
-void handle_fork_exec(int * status, int fg, struct sigaction act, char * output_filename, char * input_filename, char ** commands){
+void handle_fork_exec(int * status, int fg, struct sigaction act, char * output_filename, char * input_filename, char ** commands, pid_t * background_pids, int*num_background_pids){
 	// fork the parent and the child processes
 	pid_t pid = fork();
 	// enter child/parent/error differentiator
@@ -129,7 +136,7 @@ void handle_fork_exec(int * status, int fg, struct sigaction act, char * output_
 		// exit shell
 		fprintf(stderr, "error in fork\n");
 		*status = 1;
-		exit_shell(status);
+		exit_shell(status, background_pids, num_background_pids);
 	}
 	else{
 		// we are the parent
@@ -144,6 +151,9 @@ void handle_fork_exec(int * status, int fg, struct sigaction act, char * output_
 		else{
 			// print the background process id
 			printf("Background process id number %d\n", pid);
+			// add the pid to the list
+			background_pids[*num_background_pids] = pid;
+			(*num_background_pids)++;
 		}
 	}
 
@@ -154,10 +164,17 @@ void handle_fork_exec(int * status, int fg, struct sigaction act, char * output_
  * 
  * Exits the shell. Cleans up unfinished processes first.
  *****************************************************************************/
-void exit_shell(int * status){
+void exit_shell(int * status, pid_t * background_pids, int * num_background_pids){
 	// wait for unfinished children
-	wait_for_children(status);
+	wait_for_children(status, background_pids, num_background_pids);
 	// exit shell
+	int i = 0;
+	for(; i < *num_background_pids; i++){
+		if(background_pids[i] !=0 ){
+			kill(background_pids[i], SIGKILL);
+		}
+	}
+	free(background_pids);
 	exit(*status);
 }
 
@@ -296,7 +313,11 @@ void run_shell(){
 	char * tok;
 	// keep track of the status
 	int status = 0;
+	// keep track of all background pids
+	pid_t * background_pids = malloc(10000 * sizeof(pid_t));
+	int num_background_pids = 0;
 	// set all of the strings to be all 0's (make sure that they are clean)
+	memset(background_pids, 0, sizeof(background_pids));
 	memset(input, 0, sizeof(input));
 	memset(input_filename,0, sizeof(input_filename));
 	memset(output_filename, 0, sizeof(output_filename));
@@ -375,14 +396,14 @@ void run_shell(){
 			free(input_filename);
 			free(output_filename);
 			delete_char_array(commands, sizeof(commands));
-			exit_shell(&status);
+			exit_shell(&status, background_pids, &num_background_pids);
 		}
 		else{
 			// the user passed in a command that is not built in, handle it.
-			handle_fork_exec(&status, fg, act, output_filename, input_filename, commands);
+			handle_fork_exec(&status, fg, act, output_filename, input_filename, commands, background_pids, &num_background_pids);
 		}
 		// wait for any children that haven't finished processing
-		wait_for_children(&status);
+		wait_for_children(&status, background_pids, &num_background_pids);
 		// reset the input to empty
 		memset(input, 0, sizeof(input));
 		memset(input_filename,0, sizeof(input_filename));
@@ -396,7 +417,7 @@ void run_shell(){
 	free(output_filename);
 	delete_char_array(commands, sizeof(commands));
 	// if we somehow get here, exit
-	exit_shell(&status);
+	exit_shell(&status, background_pids, &num_background_pids);
 }
 
 /******************************************************************************
