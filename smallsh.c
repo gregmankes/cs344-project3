@@ -206,9 +206,8 @@ void get_status(int *status){
 	// if the status indicates that the process exited
 	if(WIFEXITED(*status)){
 		// let the user know that this is the case
-		printf("The process exited normally\n");
 		int exitstatus = WEXITSTATUS(*status);
-		printf("The exit status was %d\n", exitstatus);
+		printf("The proccess' exit status was %d\n", exitstatus);
 	}
 	else{// the process was killed by a signal
 		printf("The process was terminated by a signal %d\n", *status);
