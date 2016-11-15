@@ -8,26 +8,26 @@
 #include <fcntl.h>
 #include <string.h>
 
-void exit_shell(int);
-void get_status(int);
-void handle_fork_exec(int, int, struct sigaction, char *, char *, char **);
+void exit_shell(int*);
+void get_status(int*);
+void handle_fork_exec(int*, int, struct sigaction, char *, char *, char **);
 void prompt(char *);
 void change_directory(char **);
 char ** create_char_array(int, int);
 void delete_char_array(char **, int);
 void run_shell();
-void wait_for_children();
+void wait_for_children(int*);
 char ** reset_command_array(char **, int, int);
 
-void wait_for_children(int status){
-	pid_t pid = waitpid(-1, &status, WNOHANG);
+void wait_for_children(int *status){
+	pid_t pid = waitpid(-1, status, WNOHANG);
 	while(pid > 0){
 		get_status(status);
-		pid = waitpid(-1, &status, WNOHANG);
+		pid = waitpid(-1, status, WNOHANG);
 	}
 }
 
-void handle_fork_exec(int status, int fg, struct sigaction act, char * output_filename, char * input_filename, char ** commands){
+void handle_fork_exec(int * status, int fg, struct sigaction act, char * output_filename, char * input_filename, char ** commands){
 	pid_t pid = fork();
 
 	if (pid == 0){
@@ -92,14 +92,14 @@ void handle_fork_exec(int status, int fg, struct sigaction act, char * output_fi
 	else if (pid < 0){
 		// whoops, forking error
 		fprintf(stderr, "error in fork\n");
-		status = 1;
+		*status = 1;
 		exit_shell(status);
 	}
 	else{
 		// we are the parent
 		// if we are in the bg, just wait until child is done
 		if(fg){
-			waitpid(pid, &status, 0);
+			waitpid(pid, status, 0);
 		}
 		else{
 			// print the background process id
@@ -109,9 +109,9 @@ void handle_fork_exec(int status, int fg, struct sigaction act, char * output_fi
 
 }
 
-void exit_shell(int status){
+void exit_shell(int * status){
 	wait_for_children(status);
-	exit(status);
+	exit(*status);
 }
 
 void prompt(char * input){
@@ -123,14 +123,14 @@ void prompt(char * input){
 
 }
 
-void get_status(int status){
-	if(WIFEXITED(status)){
+void get_status(int *status){
+	if(WIFEXITED(*status)){
 		printf("The process exited normally\n");
-		int exitstatus = WEXITSTATUS(status);
+		int exitstatus = WEXITSTATUS(*status);
 		printf("The exit status was %d\n", exitstatus);
 	}
 	else{
-		printf("The process was terminated by a signal %d\n", status);
+		printf("The process was terminated by a signal %d\n", *status);
 	}
 	
 }
@@ -243,7 +243,7 @@ void run_shell(){
 		}
 		else if (strcmp(commands[0], "status") == 0){
 			// if the user wants the status, give it to them
-			get_status(status);
+			get_status(&status);
 		}
 		else if (strcmp(commands[0], "exit") == 0){
 			// if the user wants to exit, exit
@@ -252,14 +252,14 @@ void run_shell(){
 			free(input_filename);
 			free(output_filename);
 			delete_char_array(commands, sizeof(commands));
-			exit_shell(status);
+			exit_shell(&status);
 		}
 		else{
 			// the user passed in a command that is not built in, handle it.
-			handle_fork_exec(status, fg, act, output_filename, input_filename, commands);
+			handle_fork_exec(&status, fg, act, output_filename, input_filename, commands);
 		}
 		
-		wait_for_children(status);
+		wait_for_children(&status);
 		// reset the input to empty
 		memset(input, 0, sizeof(input));
 		memset(input_filename,0, sizeof(input_filename));
@@ -273,7 +273,7 @@ void run_shell(){
 	free(output_filename);
 	delete_char_array(commands, sizeof(commands));
 	// if we somehow get here, exit
-	exit_shell(status);
+	exit_shell(&status);
 }
 
 int main(){
