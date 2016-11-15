@@ -136,6 +136,7 @@ void handle_fork_exec(int * status, int fg, struct sigaction act, char * output_
 		// if we are in the bg, just wait until child is done
 		if(fg){
 			waitpid(pid, status, 0);
+			get_status(status);
 		}
 		else{
 			// print the background process id
